@@ -9,6 +9,7 @@ pub mod source;
 
 use anyhow::Result;
 use enclose::enclose;
+use js_sys::Object;
 use log::*;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -482,8 +483,9 @@ pub struct MapFactory {
     handle: Option<Handle>,
 }
 
+#[derive(Clone)]
 pub struct Map {
-    pub(crate) inner: crate::js::Map,
+    pub(crate) inner: Arc<crate::js::Map>,
 }
 
 impl MapFactory {
@@ -493,14 +495,15 @@ impl MapFactory {
         let inner = crate::js::Map::new(options);
 
         Ok(MapFactory {
-            map: Arc::new(Map { inner }),
+            map: Arc::new(Map {
+                inner: Arc::new(inner),
+            }),
             handle: None,
         })
     }
 
     pub fn set_listener<F: MapEventListener + 'static>(&mut self, f: F) {
-        let map = Arc::downgrade(&self.map);
-        self.handle = Some(Handle::new(map, f));
+        self.handle = Some(Handle::new(Arc::downgrade(&self.map), f));
         let handle = self.handle.as_ref().unwrap();
 
         let inner = &self.map.inner;
@@ -677,5 +680,17 @@ impl Map {
 
     pub fn loaded(&self) -> bool {
         self.inner.Map_loaded()
+    }
+}
+
+impl PartialEq for Map {
+    fn eq(&self, other: &Self) -> bool {
+        Object::is(&self.inner, &other.inner)
+    }
+}
+
+impl PartialEq for MapFactory {
+    fn eq(&self, other: &Self) -> bool {
+        self.map == other.map
     }
 }
